@@ -1,0 +1,13 @@
+imgui[glfw,pygame,sdl2,pyglet]
+matplotlib
+numpy
+opencv-python
+Pillow
+psutil
+PyYAML
+scipy
+seaborn
+torch
+torchvision
+tqdm
+ultralytics
