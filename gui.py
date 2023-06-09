@@ -1,9 +1,20 @@
 import os
+import pickle
 import imgui
 import glfw
 import pygame
+import time
 import OpenGL.GL as gl
 from imgui.integrations.glfw import GlfwRenderer
+
+control_panel_width = 400
+control_panel_height = 600
+
+empty_space_list = []
+empty_space_list_current = -1
+
+anchor_pos_list = []
+anchor_pos_list_current = -1
 
 
 def impl_glfw_init(window_name, width=1700, height=800):
@@ -46,6 +57,31 @@ def load_image(image_name):
     return texture, width, height
 
 
+def save_data(filepath="data.pickle"):
+    global empty_space_list, anchor_pos_list
+
+    save_data = {
+        "empty_space_list": empty_space_list,
+        "anchor_pos_list": anchor_pos_list,
+    }
+
+    with open(filepath, "wb") as f:
+        pickle.dump(save_data, f)
+
+
+def load_data(filepath="data.pickle"):
+    global empty_space_list, anchor_pos_list
+
+    if not os.path.exists(filepath):
+        return
+
+    with open(filepath, "rb") as f:
+        load_data = pickle.load(f)
+
+    empty_space_list.extend(load_data["empty_space_list"])
+    anchor_pos_list.extend(load_data["anchor_pos_list"])
+
+
 class GUI(object):
     def __init__(self, window):
         super().__init__()
@@ -63,21 +99,66 @@ class GUI(object):
         self.loop()
 
     def loop(self):
+        global control_panel_width, control_panel_height
         global texture_id, img_width, img_height
+        global empty_space_list, empty_space_list_current
+        global anchor_pos_list, anchor_pos_list_current
+
+        split_width = lambda x: control_panel_width // x - 5 * x
 
         while not glfw.window_should_close(self.window):
             glfw.poll_events()
             self.impl.process_inputs()
             imgui.new_frame()
-            imgui.set_next_window_size(400, 600)
+            imgui.set_next_window_size(control_panel_width, control_panel_height)
             imgui.set_next_window_position(5, 5)
             imgui.begin("Main window", True)
 
-            imgui.text("검출")
+            imgui.push_item_width(split_width(2))
+            imgui.begin_group()
+            imgui.text(f"빈 자리 좌표 ({len(empty_space_list)})")
+            empty_space_changed, empty_space_list_current = imgui.listbox(
+                label="##빈 자리 좌표",
+                current=empty_space_list_current,
+                items=empty_space_list,
+                height_in_items=3,
+            )
+            if imgui.button("제거##빈 자리 좌표") and empty_space_list_current >= 0:
+                del empty_space_list[empty_space_list_current]
+                if empty_space_list_current >= len(empty_space_list):
+                    empty_space_list_current = len(empty_space_list) - 1
+            imgui.end_group()
+            imgui.same_line()
+            imgui.begin_group()
+            imgui.text(f"앵커 좌표 ({len(anchor_pos_list)})")
+            anchor_pos_changed, anchor_pos_list_current = imgui.listbox(
+                label="##앵커 좌표",
+                current=anchor_pos_list_current,
+                items=anchor_pos_list,
+                height_in_items=3,
+            )
+            if imgui.button("제거##앵커 좌표") and anchor_pos_list_current >= 0:
+                del anchor_pos_list[anchor_pos_list_current]
+                if anchor_pos_list_current >= len(anchor_pos_list):
+                    anchor_pos_list_current = len(anchor_pos_list) - 1
+            imgui.end_group()
+            imgui.pop_item_width()
 
-            if imgui.button("물체 검출"):
-                print(f"String: {self.string}")
-                print(f"Float: {self.f}")
+            imgui.text("물체 검출")
+
+            if imgui.button("YOLO 적용"):
+                print(f"YOLO running...")
+            imgui.same_line()
+            if imgui.button("SVM 적용"):
+                print(f"SVM running...")
+
+            imgui.text("저장 및 불러오기")
+
+            if imgui.button("저장"):
+                save_data()
+            imgui.same_line()
+            if imgui.button("불러오기"):
+                load_data()
 
             imgui.show_test_window()
 
@@ -99,14 +180,23 @@ class GUI(object):
                 border_color=(255, 255, 255, 128),
             )
             if imgui.is_item_hovered():
+                mouse_pos = imgui.get_mouse_position()
+
+                if imgui.is_mouse_clicked(0):
+                    empty_space_list.append(f"{int(mouse_pos.x)}, {int(mouse_pos.y)}")
+                    empty_space_list_current = len(empty_space_list) - 1
+                elif imgui.is_mouse_clicked(1):
+                    anchor_pos_list.append(f"{int(mouse_pos.x)}, {int(mouse_pos.y)}")
+                    anchor_pos_list_current = len(anchor_pos_list) - 1
+
                 imgui.begin_tooltip()
                 region_sz = 32.0
-                region_x = imgui.get_mouse_position().x - pos.x - region_sz * 0.5
+                region_x = mouse_pos.x - pos.x - region_sz * 0.5
                 if region_x < 0.0:
                     region_x = 0.0
                 elif region_x > img_width - region_sz:
                     region_x = img_width - region_sz
-                region_y = imgui.get_mouse_position().y - pos.y - region_sz * 0.5
+                region_y = mouse_pos.y - pos.y - region_sz * 0.5
                 if region_y < 0.0:
                     region_y = 0.0
                 elif region_y > img_height - region_sz:
@@ -131,6 +221,14 @@ class GUI(object):
                 )
                 imgui.end_tooltip()
 
+            draw_list = imgui.get_window_draw_list()
+            for pos in empty_space_list:
+                x, y = tuple(map(int, pos.split(",")))
+                draw_list.add_circle_filled(x, y, 5, imgui.get_color_u32_rgba(0, 1, 0, 1))
+            for pos in anchor_pos_list:
+                x, y = tuple(map(int, pos.split(",")))
+                draw_list.add_circle_filled(x, y, 5, imgui.get_color_u32_rgba(1, 0, 0, 1))
+
             imgui.end()
 
             imgui.render()
@@ -140,6 +238,8 @@ class GUI(object):
 
             self.impl.render(imgui.get_draw_data())
             glfw.swap_buffers(self.window)
+
+            time.sleep(0.01)
 
         self.impl.shutdown()
         glfw.terminate()
