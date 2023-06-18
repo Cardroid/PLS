@@ -19,6 +19,8 @@ def use_yolo(filepath="images/image01.png"):
 
         for i in range(result.boxes.xywh.shape[0]):
             xywh = result.boxes.xywh[i]  # box with xywh format, (N, 4)
+            xywh[0] -= 40
+            xywh[1] -= 40
             cls = result.names[result.boxes.cls[i].item()]  # cls, (N, 1)
             data.append((cls, tuple(xywh.tolist())))
         data_list.append(data)
