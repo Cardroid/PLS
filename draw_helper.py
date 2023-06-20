@@ -1,5 +1,51 @@
 import math
+from typing import Tuple
 import dearpygui.dearpygui as dpg
+
+import util
+import pathfinder
+
+
+# 색 사전
+COLOR_DICT = {
+    "entrance_location_list": (255, 30, 200),
+    "empty_space_list": (255, 0, 0),
+    "anchor_pos_list": (0, 0, 255),
+    "overlap_space_list": (255, 255, 0),
+    "object_car": (0, 255, 255),
+    "object_other": (255, 255, 255),
+}
+
+
+class DrawPathNode(pathfinder.PathNode):
+    """그래픽 그리기 기능이 있는 PathNode"""
+
+    def __init__(self, x: int, y: int, node_type: str, draw_parent_tag) -> None:
+        super().__init__(x, y, node_type)
+
+        self.draw_tag = f"{node_type}_{x}_{y}"
+        self.draw_parent_tag = draw_parent_tag
+
+    def __del__(self):
+        if util.widget_check(self.draw_tag):
+            dpg.delete_item(self.draw_tag)
+
+
+def get_color(list_tag: str, alpha=255) -> Tuple[int, int, int, int]:
+    """리스트 Tag에 맞는 색 가져오기
+
+    Args:
+        list_tag (str): 리스트 Tag
+        alpha (int, optional): 알파값 (투명도). Defaults to 255.
+
+    Returns:
+        Tuple[int, int, int, int]: (Red, Green, Blue, Alpha)
+    """
+
+    global COLOR_DICT
+
+    return (*COLOR_DICT[list_tag], alpha)
+
 
 def draw_circle(x: int, y: int, radius: int, **kwargs):
     """원 그래픽 그리기

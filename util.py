@@ -2,6 +2,11 @@ from typing import Any, Optional, Union
 import cv2
 import numpy as np
 
+try:
+    import dearpygui.dearpygui as dpg
+except:
+    pass
+
 
 def convert_cv_to_dpg(image: np.ndarray, width: Optional[int], height: Optional[int]) -> np.ndarray:
     """OpenCV로 로드된 이미지를 GUI의 택스쳐 데이터로 변환 처리
@@ -29,8 +34,32 @@ def convert_cv_to_dpg(image: np.ndarray, width: Optional[int], height: Optional[
     return texture_data
 
 
-def dpg_set_value(tag, value):
-    import dearpygui.dearpygui as dpg
+def dpg_set_value(tag: Union[int, str], value: Any):
+    """위젯의 값 변경 처리 (위젯이 없을 경우, 변경 안함)
+
+    Args:
+        tag (Union[int, str]): 위젯 Tag
+        value (Any): 값
+    """
+
+    if widget_check(tag):
+        dpg.set_value(tag, value)
+
+
+def widget_check(tag: Union[int, str]):
+    """위젯 존재 및 사용가능 여부 체크
+
+    Args:
+        tag (Union[int, str]): 위젯 Tag
+
+    Returns:
+        _type_: 존재 및 사용 가능 여부
+    """
 
     if dpg.does_item_exist(tag):
-        dpg.set_value(tag, value)
+        try:
+            return dpg.is_item_ok(tag)
+        except:
+            return False
+    else:
+        return False
