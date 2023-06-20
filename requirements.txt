@@ -1,4 +1,4 @@
-imgui[glfw,pygame,sdl2,pyglet]
+dearpygui
 matplotlib
 numpy
 opencv-python
@@ -11,3 +11,4 @@ torch
 torchvision
 tqdm
 ultralytics
+pyserial
