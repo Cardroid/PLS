@@ -642,7 +642,7 @@ def app(args: Dict[str, Union[str, int]]):
             with dpg.group():
                 dpg.add_text("경로 탐색 결과")
                 dpg.add_listbox([], tag="path_find_result_listbox_widget_tag")
-            dpg.add_button(label="결과 전송", callback=lambda: logic.push_arduino())
+            dpg.add_button(label="결과 전송", callback=lambda: logic.push_arduino(args["arduino_port"]))
 
         with dpg.collapsing_header(label="기타", default_open=True):
             with dpg.group(horizontal=True):
