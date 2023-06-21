@@ -281,3 +281,104 @@ def find_path(entry_pos: Tuple[int, int], node_Creater: Optional[Callable[..., P
             print(f"\n==> 경로: {current_path}")
 
         return result_list[0]
+
+
+def get_real_distance(src_pixel_distance: Tuple[int, int], dst_pixel_distance: Tuple[int, int], x_axis_scale: Optional[int] = None, y_axis_scale: Optional[int] = None, is_abs: bool = True):
+    """축척을 반영한 실제 거리 계산
+
+    Args:
+        src_pixel_distance (Tuple[int, int]): 현재 위치
+        dst_pixel_distance (Tuple[int, int]): 목표 위치
+        x_axis_scale (int): X축의 1미터당 픽셀 수
+        y_axis_scale (int): Y축의 1미터당 픽셀 수
+        is_abs (bool): 절댓값 사용여부
+
+    Returns:
+        Tuple[int, int]: 축척을 반영한 현재 위치와 목표위치 사이의 실제 거리
+    """
+
+    if x_axis_scale is None:
+        x_axis_scale = global_data_dict["path_pixel_scale"][0]
+
+    if y_axis_scale is None:
+        y_axis_scale = global_data_dict["path_pixel_scale"][1]
+
+    x, y = src_pixel_distance
+    dx, dy = dst_pixel_distance
+
+    if is_abs:
+        return (abs(dx - x) / x_axis_scale, abs(dy - y) / y_axis_scale)
+    else:
+        return ((dx - x) / x_axis_scale, (dy - y) / y_axis_scale)
+
+
+def get_real_path(path: List[PathNode]) -> List[Tuple[int, int, int, str, str]]:
+    """노드 경로를 바탕으로 실제 서비스 정보 생성
+
+    Args:
+        path (List[PathNode]): 경로 노드 리스트
+
+    Returns:
+        List[Tuple[int, int, int, str, str]]: (각도, 회전 방향(좌, 상, 우, 하), 거리, 메시지, 짧은 메시지) 리스트
+    """
+
+    result_list = []
+
+    direction_index = 0
+
+    get_degree = lambda x, y: round(math.atan2(y, x) * 180 / math.pi) + 180
+
+    for idx, current_node in enumerate(path):
+        if 0 < idx < len(path):
+            before_node = path[idx - 1]
+            current_distance = get_real_distance((before_node.x, before_node.y), (current_node.x, current_node.y), is_abs=True)
+            x_relactive, y_relactive = current_node.x - before_node.x, current_node.y - before_node.y
+
+            x_distance, y_distance = current_distance
+            degree = get_degree(x_relactive, y_relactive)
+
+            if 45 < degree <= 135:
+                direction_index = 1
+                distance = y_distance
+            elif 225 < degree <= 315:
+                direction_index = 3
+                distance = y_distance
+            elif 135 < degree <= 225:
+                direction_index = 2
+                distance = x_distance
+            elif 315 < degree or degree <= 45:
+                direction_index = 0
+                distance = x_distance
+
+            result_list.append((degree, direction_index, distance))
+
+    temp_result_list = []
+
+    if 1 < len(result_list):
+        degree, direction_index, distance = result_list[0]
+        buffer_direction_index = direction_index
+        buffer_degree = [degree]
+        buffer_distance = distance
+
+        for degree, direction_index, distance in result_list[1:]:
+            if buffer_direction_index != direction_index:
+                r_degree = round(sum(buffer_degree) / len(buffer_degree))
+                temp_distance = round(buffer_distance)
+                if (buffer_direction_index + 1) % 4 == direction_index:
+                    short_msg = f"Right ({temp_distance}M)"
+                    msg = f"Turn right in front of {temp_distance}M"
+                elif (buffer_direction_index - 1) % 4 == direction_index:
+                    short_msg = f"Left ({temp_distance}M)"
+                    msg = f"Turn left in front of {temp_distance}M"
+                temp_result_list.append((r_degree, buffer_direction_index, temp_distance, msg, short_msg))
+                buffer_degree.clear()
+                buffer_distance = 0
+            buffer_degree.append(degree)
+            buffer_distance += distance
+            buffer_direction_index = direction_index
+        r_degree = round(sum(buffer_degree) / len(buffer_degree))
+        temp_distance = round(buffer_distance)
+        temp_result_list.append((r_degree, buffer_direction_index, temp_distance, f"Park in front of {temp_distance}M", f"Parking ({temp_distance}M)"))
+        result_list = temp_result_list
+
+    return result_list
