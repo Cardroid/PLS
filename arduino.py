@@ -103,6 +103,15 @@ class ArduinoManager:
                 timeout = self.timeout
             return readline(self.arduino, timeout=timeout)
 
+    def __enter__(self):
+        if not self.arduino.is_open:
+            self.arduino.open()
+        return self
+
+    def __exit__(self, type, value, traceback):
+        self.clear()
+        self.arduino.close()
+
 
 if __name__ == "__main__":
     # 테스트 코드

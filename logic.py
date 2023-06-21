@@ -1,11 +1,32 @@
 import os
 import pickle
+import time
 from typing import List, Tuple
+from arduino import ArduinoManager
 
 import checker
 from global_var import global_data_dict
 
 SAVE_DATA_KEYS = ["entrance_location_list", "path_pixel_scale", "empty_space_list", "anchor_pos_list", "edge_list"]
+
+
+def push_arduino():
+    """경로 정보를 아두이노로 송신"""
+
+    path_infos = global_data_dict["real_path_list"]
+    path_msg_list = [msg for _, _, _, _, msg in path_infos]
+
+    with ArduinoManager() as am:
+        before_msg = ""
+        for idx, path_msg in enumerate(path_msg_list):
+            msg = f"{idx + 1:02d}:{path_msg}"
+            print(f"[{msg}] 전송 중...")
+            am.write(0, msg)
+            am.write(1, before_msg)
+            before_msg = msg
+            time.sleep(3)
+
+    print("전송 완료.")
 
 
 def overlap_space_list_refresh(obj_data: List[Tuple[str, Tuple[int, int, int, int]]]):
