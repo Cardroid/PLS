@@ -16,7 +16,7 @@ import util
 
 # 컨트롤 창 가로, 세로
 control_window_w = 350
-control_window_h = 600
+control_window_h = 750
 
 # 이미지 가로, 세로
 image_window_w = 1300
@@ -25,9 +25,12 @@ image_window_h = 600
 
 # 현재 상태 저장용 사전
 current_state = {
+    "yolo_model_name": "YOLOv8x",
     "entrance_location_list": 0,
     "anchor_pos_list": 0,
     "anchor_pos_list": 0,
+    "edge_list": 0,
+    "edge_buffer": None,
     "draw_dict": {
         "shape": {
             "entrance_location_list": lambda *args, **kwargs: draw_helper.draw_circle(
@@ -35,6 +38,7 @@ current_state = {
             ),
             "empty_space_list": lambda *args, **kwargs: draw_helper.draw_circle(radius=5, color=draw_helper.get_color("empty_space_list"), fill=(255, 0, 0, 255), *args, **kwargs),
             "anchor_pos_list": lambda *args, **kwargs: draw_helper.draw_circle(radius=5, color=draw_helper.get_color("anchor_pos_list"), fill=(0, 0, 255, 255), *args, **kwargs),
+            "edge_list": lambda *args, **kwargs: dpg.draw_line(color=draw_helper.get_color("edge_list"), *args, **kwargs),
             "overlap_space_list": lambda *args, **kwargs: draw_helper.draw_polygon(point_num=6, radius=25, color=draw_helper.get_color("overlap_space_list"), *args, **kwargs),
             "object_car": lambda *args, **kwargs: draw_helper.draw_rectangle(color=draw_helper.get_color("object_car"), *args, **kwargs),
             "object_other": lambda *args, **kwargs: draw_helper.draw_rectangle(color=draw_helper.get_color("object_other"), *args, **kwargs),
@@ -75,7 +79,10 @@ def remove_list_item_handler(list_tag: str):
     source_list = global_data_dict[list_tag]
     if item in source_list:
         item_idx = source_list.index(item)
-        update_pos_list(list_tag, item, True)
+        if list_tag == "edge_list":
+            update_edge(item, True)
+        else:
+            update_pos_list(list_tag, item, True)
         dpg.configure_item(list_tag, items=source_list)
 
         if len(source_list) > 0:
@@ -154,7 +161,7 @@ def detect_object(method_type: str):
         import yolo_helper
 
         print("inferring...")
-        object_data = yolo_helper.use_yolo(image_path)[0]
+        object_data = yolo_helper.use_yolo(image_path, current_state["yolo_model_name"].lower() + ".pt")[0]
 
     for cls, (x, y, w, h) in object_data:
         cls = cls if cls == "car" else "other"
@@ -163,6 +170,16 @@ def detect_object(method_type: str):
         func(x, y, x + w, y + h, thickness=3, tag=draw_tag, parent=img_widget_tag)
 
     overlap_space_list_refresh()
+
+
+def select_yolo_model_handler(sender: Union[int, str], data: str):
+    """YOLO 모델 변경 콤보박스 위젯 콜백 처리
+
+    Args:
+        sender (Union[int, str]): 위젯 Tag
+        data (str): 모델 이름
+    """
+    current_state["yolo_model_name"] = data
 
 
 def add_point(sender: Union[int, str], data: Tuple[int, int]):
@@ -181,16 +198,95 @@ def add_point(sender: Union[int, str], data: Tuple[int, int]):
         y -= 8
 
         if btn_type == 0:
-            list_tag = "empty_space_list"
+            if dpg.is_key_down(dpg.mvKey_Shift):
+                list_tag = "edge_list"
+            else:
+                list_tag = "empty_space_list"
         elif btn_type == 1:
             list_tag = "anchor_pos_list"
         elif btn_type == 2:
             list_tag = "entrance_location_list"
 
-        update_pos_list(list_tag, (x, y), False)
-        dpg.configure_item(list_tag, items=global_data_dict[list_tag])
+        if list_tag == "edge_list":
+            update_edge((x, y))
+        else:
+            update_pos_list(list_tag, (x, y), False)
 
-        source_list = global_data_dict[list_tag]
+            dpg.configure_item(list_tag, items=global_data_dict[list_tag])
+
+            source_list = global_data_dict[list_tag]
+            if 0 < len(source_list):
+                current_select_item = source_list[len(source_list) - 1]
+                current_state[list_tag] = current_select_item
+                dpg.configure_item(list_tag, default_value=current_select_item)
+
+
+def update_edge(pos: Union[str, Tuple[int, int]], is_delete: bool = False):
+    """간선 추가
+
+    Args:
+        pos (Union[str, Tuple[int, int]]): 현재의 정점 위치
+        is_delete (bool, optional): 삭제 옵션. Defaults to False.
+    """
+    list_tag = "edge_list"
+
+    if is_delete:
+        idx = global_data_dict[list_tag].index(pos)
+        del global_data_dict[list_tag][idx]
+
+        draw_edge()
+    else:
+        temp_pos = None
+        min_distance = None
+        for anchor_pos in global_data_dict["anchor_pos_list"]:
+            x, y = pos
+            ax, ay = tuple(map(int, anchor_pos.split(",")))
+            distance = pathfinder.calculate_distance(ax, ay, x, y, mode="euclidean")
+
+            if min_distance is None or distance < min_distance:
+                temp_pos = (ax, ay)
+                min_distance = distance
+        pos = temp_pos
+
+        if current_state["edge_buffer"] is None:
+            current_state["edge_buffer"] = pos
+        else:
+            bx, by = current_state["edge_buffer"]
+            x, y = pos
+
+            if bx != x or by != y:
+                current_state["edge_buffer"] = None
+
+                global_data_dict[list_tag].append(f"{bx}, {by} - {x}, {y}")
+
+                draw_edge()
+
+
+def draw_edge():
+    """간선 그래픽 처리"""
+
+    list_tag = "edge_list"
+
+    edge_list: List[str] = global_data_dict[list_tag]
+    draw_widget_tag = f"{list_tag}_widget_tag"
+
+    func = current_state["draw_dict"]["shape"][list_tag]
+
+    if util.widget_check(draw_widget_tag):
+        dpg.delete_item(draw_widget_tag)
+
+    with dpg.draw_node(tag=draw_widget_tag, parent=img_widget_tag):
+        for edge in edge_list:
+            bpos, apos = edge.split("-")
+            bx, by = tuple(map(int, bpos.split(",")))
+            ax, ay = tuple(map(int, apos.split(",")))
+
+            func(p1=(bx, by), p2=(ax, ay))
+
+    dpg.configure_item(list_tag, items=global_data_dict[list_tag])
+
+    source_list = global_data_dict[list_tag]
+    if 0 < len(source_list):
         current_select_item = source_list[len(source_list) - 1]
         current_state[list_tag] = current_select_item
         dpg.configure_item(list_tag, default_value=current_select_item)
@@ -214,6 +310,21 @@ def update_pos_list(list_tag: str, obj: Union[str, Tuple[int, int]], is_delete: 
 
     if is_delete:
         idx = global_data_dict[list_tag].index(f"{x}, {y}")
+
+        if list_tag == "anchor_pos_list":
+            e_idxs = []
+            for i, edge in enumerate(global_data_dict["edge_list"]):
+                bpos, apos = edge.split("-")
+                bx, by = tuple(map(int, bpos.split(",")))
+                ax, ay = tuple(map(int, apos.split(",")))
+
+                if bx == x and by == y or ax == x and ay == y:
+                    e_idxs.append(i)
+
+            e_idxs.reverse()
+            for e_idx in e_idxs:
+                del global_data_dict["edge_list"][e_idx]
+
         del global_data_dict[list_tag][idx]
     else:
         data = f"{x}, {y}"
@@ -248,7 +359,7 @@ def refresh_draw():
 
     overlap_space_list_refresh()
     refresh_path_pixel_scale_axis()
-    path_pixel_scale_grid_calculate()
+    draw_edge()
 
 
 def refresh_select():
@@ -256,7 +367,7 @@ def refresh_select():
 
     global current_state
 
-    for list_tag in ["empty_space_list", "anchor_pos_list", "entrance_location_list"]:
+    for list_tag in ["empty_space_list", "anchor_pos_list", "entrance_location_list", "edge_list"]:
         source_list = global_data_dict[list_tag]
         if len(source_list) > 0:
             current_state[list_tag] = source_list[len(source_list) - 1]
@@ -323,38 +434,25 @@ def path_pixel_scale_grid_calculate():
             for y in range(0, img_h, path_pixel_scale_y):
                 dpg.draw_line((0, y), (img_w, y), color=color, thickness=1)
 
-    global_data_dict["nodes"].clear()
-    for y in range(0, img_h, path_pixel_scale_y):
-        for x in range(0, img_w, path_pixel_scale_x):
-            dx = x + path_pixel_scale_x
-            dy = y + path_pixel_scale_y
-            is_break = False
+        for y in range(0, img_h, path_pixel_scale_y):
+            for x in range(0, img_w, path_pixel_scale_x):
+                dx = x + path_pixel_scale_x
+                dy = y + path_pixel_scale_y
+                is_break = False
 
-            for list_tag in ["empty_space_list", "anchor_pos_list", "entrance_location_list"]:
-                data_list = global_data_dict[list_tag]
-                color = draw_helper.get_color(list_tag, 30)
-                for s_data in data_list:
-                    data = tuple(map(int, s_data.split(",")))
-                    if checker.check_coord_overlap((x + 1, y + 1, dx - x, dy - y), data):
-                        if is_path_pixel_scale_grid_view:
+                for list_tag in ["empty_space_list", "anchor_pos_list", "entrance_location_list"]:
+                    data_list = global_data_dict[list_tag]
+                    color = draw_helper.get_color(list_tag, 30)
+                    for s_data in data_list:
+                        data = tuple(map(int, s_data.split(",")))
+                        if checker.check_coord_overlap((x + 1, y + 1, dx - x, dy - y), data):
                             draw_helper.draw_rectangle(x + 1, y + 1, dx, dy, color=color, fill=color, parent=draw_widget_tag)
-
-                        if list_tag == "entrance_location_list":
-                            global_data_dict["rootnodes"].append(draw_helper.DrawPathNode(data[0], data[1], list_tag, draw_parent_tag=img_widget_tag))
-                        elif list_tag == "empty_space_list":
-                            is_empty_space = True
-                            for e_pos in global_data_dict["overlap_space_list"]:
-                                is_empty_space = e_pos == s_data
-
-                            global_data_dict["nodes"].append(draw_helper.DrawPathNode(data[0], data[1], list_tag, draw_parent_tag=img_widget_tag))
-                        else:
-                            global_data_dict["nodes"].append(draw_helper.DrawPathNode(data[0], data[1], list_tag, draw_parent_tag=img_widget_tag))
-                        is_break = True
-                        break
+                            is_break = True
+                            break
+                        if is_break:
+                            break
                     if is_break:
                         break
-                if is_break:
-                    break
 
 
 def path_pixel_scale_slider_handler(sender: Union[int, str], axis_type: str):
@@ -447,6 +545,7 @@ def app(image_path: str):
         empty_space_list = global_data_dict["empty_space_list"]
         anchor_pos_list = global_data_dict["anchor_pos_list"]
         overlap_space_list = global_data_dict["overlap_space_list"]
+        edge_list = global_data_dict["edge_list"]
 
         with dpg.collapsing_header(label="전처리", default_open=True):
             with dpg.group(horizontal=True, width=100):
@@ -472,6 +571,8 @@ def app(image_path: str):
                 dpg.add_button(label="YOLO 적용", callback=lambda: detect_object("YOLO"))
                 # dpg.add_button(label="SVM", callback=lambda: detect_object("SVM"))
 
+                dpg.add_combo(["YOLOv8n", "YOLOv8s", "YOLOv8m", "YOLOv8l", "YOLOv8x"], default_value=current_state["yolo_model_name"], callback=select_yolo_model_handler)
+
         with dpg.collapsing_header(label="경로탐색", default_open=True):
             dpg.add_checkbox(
                 label="그리드 뷰",
@@ -494,6 +595,11 @@ def app(image_path: str):
                     default_value=global_data_dict["path_pixel_scale"][1],
                     tag="y_path_pixel_scale_slider_int",
                 )
+
+            with dpg.group():
+                dpg.add_text("간선 좌표")
+                dpg.add_listbox(edge_list, callback=lambda: list_seleted_handler("edge_list"), tag="edge_list")
+                dpg.add_button(label="제거", callback=lambda: remove_list_item_handler("edge_list"))
 
             with dpg.group(horizontal=True):
                 dpg.add_button(label="실행", callback=lambda: find_path())

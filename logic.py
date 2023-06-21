@@ -5,7 +5,7 @@ from typing import List, Tuple
 import checker
 from global_var import global_data_dict
 
-SAVE_DATA_KEYS = ["entrance_location_list", "path_pixel_scale", "empty_space_list", "anchor_pos_list"]
+SAVE_DATA_KEYS = ["entrance_location_list", "path_pixel_scale", "empty_space_list", "anchor_pos_list", "edge_list"]
 
 
 def overlap_space_list_refresh(obj_data: List[Tuple[str, Tuple[int, int, int, int]]]):

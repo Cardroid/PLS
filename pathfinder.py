@@ -10,7 +10,7 @@ EMPTY_SPACE = "empty_space_list"
 ANCHOR = "anchor_pos_list"
 
 
-def calculate_distance(x: int, y: int, dx: int, dy: int) -> int:
+def calculate_distance(x: int, y: int, dx: int, dy: int, mode: Literal["manhattan", "euclidean"] = "manhattan") -> int:
     """Manhattan distance 계산 처리
 
     Args:
@@ -18,13 +18,16 @@ def calculate_distance(x: int, y: int, dx: int, dy: int) -> int:
         y (int): 출발 좌표 Y
         dx (int): 목적 좌표 X
         dy (int): 목적 좌표 Y
+        mode (Literal[&quot;manhattan&quot;, &quot;euclidean&quot;], optional): 거리계산 모드. Defaults to "manhattan".
 
     Returns:
         int: 거리
     """
 
-    return abs(dx - x) + abs(dy - y)
-    # return math.sqrt((dx - x) ** 2 + (dy - y) ** 2)
+    if mode == "manhattan":
+        return abs(dx - x) + abs(dy - y)
+    elif mode == "euclidean":
+        return math.sqrt((dx - x) ** 2 + (dy - y) ** 2)
 
 
 class PathNode:

@@ -2,15 +2,13 @@ import cv2
 from ultralytics import YOLO
 
 
-def use_yolo(filepath="images/image01.png"):
+def use_yolo(filepath="images/image01.png", model_name="yolov8n.pt"):
     global model
 
-    model = YOLO("yolov8x.pt")
-    # accepts all formats - image/dir/Path/URL/video/PIL/ndarray. 0 for webcam
+    model = YOLO(model_name)
 
-    # from ndarray
     im2 = cv2.imread(filepath)
-    results = model.predict(source=im2)  # save predictions as labels
+    results = model.predict(source=im2)
 
     data_list = []
 

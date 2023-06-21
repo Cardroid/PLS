@@ -11,6 +11,7 @@ COLOR_DICT = {
     "entrance_location_list": (255, 30, 200),
     "empty_space_list": (255, 0, 0),
     "anchor_pos_list": (0, 0, 255),
+    "edge_list": (0, 0, 255),
     "overlap_space_list": (255, 255, 0),
     "object_car": (0, 255, 255),
     "object_other": (255, 255, 255),

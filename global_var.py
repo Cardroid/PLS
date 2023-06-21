@@ -3,6 +3,7 @@ global_data_dict = {
     "path_pixel_scale": [30, 30],
     "rootnodes": [],
     "nodes": [],
+    "edge_list": [],
     "anchor_connect_list": [],
     "entrance_location_list": [],
     "empty_space_list": [],
