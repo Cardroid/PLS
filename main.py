@@ -360,6 +360,7 @@ def refresh_draw():
     overlap_space_list_refresh()
     refresh_path_pixel_scale_axis()
     draw_edge()
+    clear_path()
 
 
 def refresh_select():
@@ -497,17 +498,13 @@ def find_path():
     s_entry_pos = current_state["entrance_location_list"]
     entry_pos_x, entry_pos_y = tuple(map(int, s_entry_pos.split(",")))
 
-    rootnodes = global_data_dict["rootnodes"]
-    rootnode = None
+    pathfinder.find_path((entry_pos_x, entry_pos_y), lambda *args, **kwargs: draw_helper.DrawPathNode(*args, **kwargs, draw_parent_tag=img_widget_tag))
 
-    for node in rootnodes:
-        if node.x == entry_pos_x and node.y == entry_pos_y:
-            rootnode = node
 
-    if rootnode == None:
-        print("루트 노드를 찾지 못함.")
+def clear_path():
+    """탐색된 경로 초기화"""
 
-    pathfinder.find_path(rootnode)
+    pathfinder.nodes_clear()
 
 
 def app(image_path: str):
@@ -603,7 +600,7 @@ def app(image_path: str):
 
             with dpg.group(horizontal=True):
                 dpg.add_button(label="실행", callback=lambda: find_path())
-                dpg.add_button(label="초기화", callback=lambda: find_path())
+                dpg.add_button(label="초기화", callback=lambda: clear_path())
 
         with dpg.collapsing_header(label="결과", default_open=True):
             dpg.add_text(f"총 공간: {len(empty_space_list)}\n- 차량 존재: {len(overlap_space_list)}\n= 빈 공간: {len(empty_space_list) - len(overlap_space_list)}", tag=status_widget_tag)

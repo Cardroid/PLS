@@ -1,5 +1,6 @@
 import math
-from typing import Tuple
+import time
+from typing import Generator, Tuple
 import dearpygui.dearpygui as dpg
 
 import util
@@ -13,6 +14,8 @@ COLOR_DICT = {
     "anchor_pos_list": (0, 0, 255),
     "edge_list": (0, 0, 255),
     "overlap_space_list": (255, 255, 0),
+    "near_node": (255, 255, 0),
+    "near_node_path_finding": (255, 0, 0),
     "object_car": (0, 255, 255),
     "object_other": (255, 255, 255),
 }
@@ -24,12 +27,44 @@ class DrawPathNode(pathfinder.PathNode):
     def __init__(self, x: int, y: int, node_type: str, draw_parent_tag) -> None:
         super().__init__(x, y, node_type)
 
-        self.draw_tag = f"{node_type}_{x}_{y}"
+        self.draw_tag_counter = 0
+        self.draw_tags = []
         self.draw_parent_tag = draw_parent_tag
 
-    def __del__(self):
-        if util.widget_check(self.draw_tag):
-            dpg.delete_item(self.draw_tag)
+    def _get_draw_tag(self):
+        draw_tag = f"{self.node_type}_{self.x}_{self.y}_{self.draw_tag_counter}"
+        self.draw_tag_counter += 1
+        self.draw_tags.append(draw_tag)
+        return draw_tag
+
+    def add_near_node(self, node):
+        result = super().add_near_node(node)
+
+        if self.node_type != pathfinder.ANCHOR or node.node_type != pathfinder.ANCHOR:
+            dpg.draw_line((self.x, self.y), (node.x, node.y), color=get_color("near_node"), tag=self._get_draw_tag(), parent=self.draw_parent_tag)
+
+        return result
+
+    def get_near_node(self) -> Generator:
+        nodes = super().get_near_node()
+
+        draw_tag = self._get_draw_tag()
+
+        for near_node in nodes:
+            if util.widget_check(draw_tag):
+                dpg.delete_item(draw_tag)
+
+            dpg.draw_line((self.x, self.y), (near_node.x, near_node.y), color=get_color("near_node_path_finding"), thickness=2, tag=draw_tag, parent=self.draw_parent_tag)
+
+            time.sleep(0.5)
+
+            yield near_node
+
+    def clear(self):
+        for draw_tag in self.draw_tags:
+            if util.widget_check(draw_tag):
+                dpg.delete_item(draw_tag)
+        return super().clear()
 
 
 def get_color(list_tag: str, alpha=255) -> Tuple[int, int, int, int]:

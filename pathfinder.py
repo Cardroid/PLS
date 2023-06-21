@@ -1,6 +1,6 @@
 import math
 from queue import PriorityQueue, Queue
-from typing import List, Literal, Tuple
+from typing import Callable, Generator, List, Literal, Optional, Tuple
 
 from global_var import global_data_dict
 
@@ -43,149 +43,217 @@ class PathNode:
         self.x = x
         self.y = y
         self.node_type = node_type
-        self.near_nodes = []  # 연결된 인접 노드
+        self._near_nodes = []  # 연결된 인접 노드
+
+    def add_near_node(self, node):
+        """연결된 노드 추가
+
+        Args:
+            node (PathNode): _description_
+        """
+        self._near_nodes.append(node)
+
+    def get_near_node(self) -> Generator:
+        """연결된 노드 반환
+
+        Yields:
+            Generator[PathNode]: 노드를 하나씩 반환
+        """
+        return self._near_nodes
 
     @property
-    def is_last_node(self) -> bool:
+    def is_root_node(self) -> bool:
+        """루트 노드 여부"""
+        return self.node_type == ENTRANCE
+
+    @property
+    def is_leaf_node(self) -> bool:
         """마지막 노드 여부"""
         return self.node_type == EMPTY_SPACE
 
-    def __del__(self):
-        pass
+    def __repr__(self) -> str:
+        return f"노드 타입: {self.node_type}\n" f"루트노드 여부: {self.is_root_node}\n" f"리프노드 여부: {self.is_leaf_node}\n" f"연결된 노드 개수: {len(self._near_nodes)}"
+
+    def clear(self):
+        self._near_nodes.clear()
 
 
-def calculate_distance_node(node: PathNode, dnode: PathNode) -> int:
+def calculate_distance_node(node: PathNode, dnode: PathNode, mode: Literal["manhattan", "euclidean"] = "manhattan") -> int:
     """노드간 거리 계산
 
     Args:
         node (PathNode): 출발노드
         dnode (PathNode): 목적노드
+        mode (Literal[&quot;manhattan&quot;, &quot;euclidean&quot;], optional): 거리계산 모드. Defaults to "manhattan".
 
     Returns:
         int: 거리
     """
 
-    return calculate_distance(node.x, node.y, dnode.x, dnode.y)
+    return calculate_distance(node.x, node.y, dnode.x, dnode.y, mode)
 
 
 def nodes_clear():
     """저장된 노드 초기화"""
 
-    rootnodes = global_data_dict["rootnodes"]
     nodes = global_data_dict["nodes"]
-
-    for node in rootnodes:
-        del node
-    rootnodes.clear()
     for node in nodes:
-        del node
+        node.clear()
     nodes.clear()
 
 
-def node_preprocessing():
+def node_preprocessing(node_Creater: Optional[Callable[..., PathNode]]):
     """노드 전처리
 
     1. 좌표를 기반으로 노드 생성
     2. 주차장 입구 노드(루트노드) 및 주차 자리 노드를 가장 가까운 앵커노드에 연결
+
+    Args:
+        node_Creater (Optional[Callable[..., PathNode]]): 노드 생성자
     """
 
-    rootnodes = global_data_dict["rootnodes"]
-    nodes = global_data_dict["nodes"]
+    if node_Creater is None:
+        node_Creater = PathNode
 
-    rootnode: PathNode
-    node: PathNode
+    data_list: List[str]
+    anchor_pos_list: List[str]
+    nodes: List[PathNode] = global_data_dict["nodes"]
+
     p_node: PathNode
     q_node: PathNode
 
-    for p_node in nodes:
-        for q_node in nodes:
-            if p_node == q_node:
-                continue
+    anchor_pos_list = global_data_dict["anchor_pos_list"]
+    anchor_node_list = []
 
-            if p_node.node_type == EMPTY_SPACE:
-                continue
-            p_node.put(q_node)
+    for s_data in anchor_pos_list:
+        data = tuple(map(int, s_data.split(",")))
+        node = node_Creater(data[0], data[1], ANCHOR)
+        nodes.append(node)
+        anchor_node_list.append(node)
 
-    for p_node in nodes:
-        min_distance = None
-        dist_node = None
+    overlap_space_list = global_data_dict["overlap_space_list"]
 
-        for q_node in nodes:
-            if p_node == q_node:
-                continue
+    for list_tag in ["empty_space_list", "entrance_location_list"]:
+        data_list = global_data_dict[list_tag]
+        for s_data in data_list:
+            x, y = tuple(map(int, s_data.split(",")))
 
-            if p_node.node_type == EMPTY_SPACE and q_node.node_type == ANCHOR:
-                distance = calculate_distance_node(p_node, q_node)
-                if min_distance is None or min_distance > distance:
+            if list_tag == "empty_space_list":
+                is_jump = False
+                for cls, (ox, oy) in overlap_space_list:
+                    if x == ox and y == oy:
+                        is_jump = True
+                        break
+                if is_jump:
+                    continue
+
+            node = node_Creater(x, y, list_tag)
+
+            min_distance = None
+            dist_node = None
+
+            for anchor_node in anchor_node_list:
+                distance = calculate_distance_node(anchor_node, node)
+                if min_distance is None or distance < min_distance:
                     min_distance = distance
-                    dist_node = p_node
+                    dist_node = anchor_node
 
-            elif p_node.node_type == ANCHOR and q_node.node_type == ANCHOR:
-                distance = calculate_distance_node(p_node, q_node)
-                if min_distance is None or min_distance > distance:
-                    min_distance = distance
-                    dist_node = p_node
+            node.add_near_node(dist_node)
+            dist_node.add_near_node(node)
+            nodes.append(node)
 
-        p_node.parent = dist_node
+    compare = (
+        lambda bx, by, ax, ay, a_node, b_node: a_node.x == bx
+        and a_node.y == by
+        and b_node.x == ax
+        and b_node.y == ay
+        or b_node.x == bx
+        and b_node.y == by
+        and a_node.x == ax
+        and a_node.y == ay
+    )
 
-    min_distance = None
-    dist_node = None
+    for edge in global_data_dict["edge_list"]:
+        is_break = False
+        bpos, apos = edge.split("-")
+        bx, by = tuple(map(int, bpos.split(",")))
+        ax, ay = tuple(map(int, apos.split(",")))
 
-    for rootnode in rootnodes:
-        for node in nodes:
-            if node.node_type == ANCHOR:
-                distance = calculate_distance_node(rootnode, node)
-                if min_distance is None or min_distance > distance:
-                    min_distance = distance
-                    dist_node = p_node
+        for p_node in nodes:
+            for q_node in nodes:
+                if p_node == q_node:
+                    continue
+                if compare(bx, by, ax, ay, p_node, q_node):
+                    p_node.add_near_node(q_node)
+                    q_node.add_near_node(p_node)
+                    is_break = True
+                if is_break:
+                    break
+            if is_break:
+                break
 
-        rootnode.put(dist_node)
 
-
-def find_path(rootnode: PathNode) -> Tuple[PathNode, PathNode]:
+def find_path(entry_pos: Tuple[int, int], node_Creater: Optional[Callable[..., PathNode]]) -> Tuple[PathNode, PathNode]:
     """가장 가까운 빈 주차자리 노드의 탐색 및 도달 경로 탐색 처리
 
     Args:
         rootnode (PathNode): 주차장 입구 노드(루트노드)
+        node_Creater (Optional[Callable[..., PathNode]]): 노드 생성자
 
     Returns:
         Tuple[PathNode, PathNode]: 출발 노드, 도착 노드
     """
 
-    node_preprocessing()
+    nodes_clear()
 
-    nodes: List[PathNode]
-    nodes = global_data_dict["nodes"]
+    node_preprocessing(node_Creater)
+
+    nodes: List[PathNode] = global_data_dict["nodes"]
+
+    entry_pos_x, entry_pos_y = entry_pos
+    root_node = None
+
+    for node in nodes:
+        if node.x == entry_pos_x and node.y == entry_pos_y:
+            root_node = node
+
+    assert root_node is not None, "루트 노드를 찾지 못했습니다."
 
     min_distance = None
     dist_node = None
 
     for node in nodes:
-        if node.node_type == EMPTY_SPACE and node.is_empty_space:
-            distance = calculate_distance_node(rootnode, node)
-            if min_distance is None or min_distance > distance:
+        if node.is_leaf_node:
+            distance = calculate_distance_node(root_node, node)
+            if min_distance is None or distance < min_distance:
                 min_distance = distance
                 dist_node = node
 
     assert dist_node is not None, "빈 주차 자리를 찾을 수 없습니다."
 
+    print(f"\n가장 가까운 노드 거리: {min_distance}")
+    print(f"[출발 노드]")
+    print(" -> " + str(root_node).replace("\n", "\n -> "))
+    print(f"\n[도착 노드]")
+    print(" -> " + str(dist_node).replace("\n", "\n -> "))
+
     # 1. 입구에서 가장 가까운 빈 자리
     # 2. 경로 (노드를 순서대로 반환)
     # 3. 거리 계산 (멘하탄 거리)
 
-    node: PathNode
-    start_node = rootnode.get()
-    queue = Queue()
-    queue.put(dist_node.parent)
+    # node: PathNode
+    # start_node = root_node.get()
+    # queue = Queue()
+    # queue.put(dist_node.parent)
 
-    while len(queue) > 0:
-        node = queue.get()
+    # while len(queue) > 0:
+    #     node = queue.get()
 
-        if node.parent == start_node:
-            p_node = node.parent
-            p_node.parent = start_node
-            break
+    #     if node.parent == start_node:
+    #         p_node = node.parent
+    #         p_node.parent = start_node
+    #         break
 
-        queue.put(node.parent)
+    #     queue.put(node.parent)
 
-    return rootnode, dist_node
+    # return root_node, dist_node

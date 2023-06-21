@@ -1,7 +1,6 @@
 # 전역 상태 저장 사전
 global_data_dict = {
     "path_pixel_scale": [30, 30],
-    "rootnodes": [],
     "nodes": [],
     "edge_list": [],
     "anchor_connect_list": [],
