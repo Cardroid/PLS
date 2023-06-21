@@ -12,13 +12,13 @@ from global_var import global_data_dict
 SAVE_DATA_KEYS = ["entrance_location_list", "path_pixel_scale", "empty_space_list", "anchor_pos_list", "edge_list"]
 
 
-def push_arduino():
+def push_arduino(port: str):
     """경로 정보를 아두이노로 송신"""
 
     path_infos = global_data_dict["real_path_list"]
     path_msg_list = [msg for _, _, _, _, msg in path_infos]
 
-    with ArduinoManager() as am:
+    with ArduinoManager(port=port) as am:
         before_msg = ""
         for idx, path_msg in enumerate(path_msg_list):
             msg = f"{idx + 1:02d}:{path_msg}"
@@ -137,7 +137,7 @@ def processing(frame, args: Dict[str, Union[str, int]]):
     # 프레임 출력
     cv2.imshow("VideoFrame", frame)
 
-    push_arduino()
+    push_arduino(args["arduino_port"])
 
 
 def real_time_start(args: Dict[str, Union[str, int]]):
