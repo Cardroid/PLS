@@ -57,7 +57,7 @@ class DrawPathNode(pathfinder.PathNode):
 
             dpg.draw_line((self.x, self.y), (near_node.x, near_node.y), color=get_color("near_node_path_finding"), thickness=2, tag=draw_tag, parent=self.draw_parent_tag)
 
-            time.sleep(0.01)
+            time.sleep(0.01)  # 경로 탐색 과정을 보여주기 위한 간선 1회 탐색 당 지연시간
 
             yield near_node
 
