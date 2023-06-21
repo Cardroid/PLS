@@ -16,6 +16,7 @@ COLOR_DICT = {
     "overlap_space_list": (255, 255, 0),
     "near_node": (255, 255, 0),
     "near_node_path_finding": (255, 0, 0),
+    "path_result": (0, 255, 0),
     "object_car": (0, 255, 255),
     "object_other": (255, 255, 255),
 }
@@ -56,7 +57,7 @@ class DrawPathNode(pathfinder.PathNode):
 
             dpg.draw_line((self.x, self.y), (near_node.x, near_node.y), color=get_color("near_node_path_finding"), thickness=2, tag=draw_tag, parent=self.draw_parent_tag)
 
-            time.sleep(0.5)
+            time.sleep(0.01)
 
             yield near_node
 

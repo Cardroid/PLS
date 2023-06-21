@@ -31,6 +31,7 @@ current_state = {
     "anchor_pos_list": 0,
     "edge_list": 0,
     "edge_buffer": None,
+    "path": None,
     "draw_dict": {
         "shape": {
             "entrance_location_list": lambda *args, **kwargs: draw_helper.draw_circle(
@@ -153,6 +154,8 @@ def detect_object(method_type: str):
 
     print(f"{method_type.upper()} running...")
     method_type = method_type.lower()
+
+    clear_path()
 
     if method_type == "clear":
         object_data.clear()
@@ -495,10 +498,26 @@ def refresh_path_pixel_scale_axis():
 def find_path():
     """경로 탐색"""
 
+    draw_widget_tag = "find_path_draw_widget_tag"
+
+    if util.widget_check(draw_widget_tag):
+        dpg.delete_item(draw_widget_tag)
+
     s_entry_pos = current_state["entrance_location_list"]
     entry_pos_x, entry_pos_y = tuple(map(int, s_entry_pos.split(",")))
 
-    pathfinder.find_path((entry_pos_x, entry_pos_y), lambda *args, **kwargs: draw_helper.DrawPathNode(*args, **kwargs, draw_parent_tag=img_widget_tag))
+    current_state["path"] = pathfinder.find_path(
+        (entry_pos_x, entry_pos_y),
+        lambda *args, **kwargs: draw_helper.DrawPathNode(*args, **kwargs, draw_parent_tag=img_widget_tag),
+        dpg.get_value("path_finder_fast_mode"),
+    )
+    distance, path = current_state["path"]
+
+    with dpg.draw_node(tag=draw_widget_tag, parent=img_widget_tag):
+        for idx, node in enumerate(path):
+            if 0 < idx < len(path):
+                before_node = path[idx - 1]
+                dpg.draw_line((before_node.x, before_node.y), (node.x, node.y), color=draw_helper.get_color("path_result"), thickness=2)
 
 
 def clear_path():
@@ -601,6 +620,7 @@ def app(image_path: str):
             with dpg.group(horizontal=True):
                 dpg.add_button(label="실행", callback=lambda: find_path())
                 dpg.add_button(label="초기화", callback=lambda: clear_path())
+                dpg.add_checkbox(label="단순 경로 탐색", tag="path_finder_fast_mode", default_value=True)
 
         with dpg.collapsing_header(label="결과", default_open=True):
             dpg.add_text(f"총 공간: {len(empty_space_list)}\n- 차량 존재: {len(overlap_space_list)}\n= 빈 공간: {len(empty_space_list) - len(overlap_space_list)}", tag=status_widget_tag)

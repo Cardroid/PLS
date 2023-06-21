@@ -1,3 +1,4 @@
+import copy
 import math
 from queue import PriorityQueue, Queue
 from typing import Callable, Generator, List, Literal, Optional, Tuple
@@ -72,7 +73,13 @@ class PathNode:
         return self.node_type == EMPTY_SPACE
 
     def __repr__(self) -> str:
-        return f"노드 타입: {self.node_type}\n" f"루트노드 여부: {self.is_root_node}\n" f"리프노드 여부: {self.is_leaf_node}\n" f"연결된 노드 개수: {len(self._near_nodes)}"
+        return (
+            f"\n=====\n 노드 위치: ({self.x} {self.y})\n"
+            f" 노드 타입: {self.node_type}\n"
+            f" 루트노드 여부: {self.is_root_node}\n"
+            f" 리프노드 여부: {self.is_leaf_node}\n"
+            f" 연결된 노드 개수: {len(self._near_nodes)}"
+        )
 
     def clear(self):
         self._near_nodes.clear()
@@ -193,12 +200,13 @@ def node_preprocessing(node_Creater: Optional[Callable[..., PathNode]]):
                 break
 
 
-def find_path(entry_pos: Tuple[int, int], node_Creater: Optional[Callable[..., PathNode]]) -> Tuple[PathNode, PathNode]:
+def find_path(entry_pos: Tuple[int, int], node_Creater: Optional[Callable[..., PathNode]], is_fast_mode: bool = True) -> Tuple[PathNode, PathNode]:
     """가장 가까운 빈 주차자리 노드의 탐색 및 도달 경로 탐색 처리
 
     Args:
         rootnode (PathNode): 주차장 입구 노드(루트노드)
         node_Creater (Optional[Callable[..., PathNode]]): 노드 생성자
+        is_fast_mode (bool): 단순 경로 탐색 여부
 
     Returns:
         Tuple[PathNode, PathNode]: 출발 노드, 도착 노드
@@ -219,41 +227,57 @@ def find_path(entry_pos: Tuple[int, int], node_Creater: Optional[Callable[..., P
 
     assert root_node is not None, "루트 노드를 찾지 못했습니다."
 
-    min_distance = None
-    dist_node = None
-
-    for node in nodes:
-        if node.is_leaf_node:
-            distance = calculate_distance_node(root_node, node)
-            if min_distance is None or distance < min_distance:
-                min_distance = distance
-                dist_node = node
-
-    assert dist_node is not None, "빈 주차 자리를 찾을 수 없습니다."
-
-    print(f"\n가장 가까운 노드 거리: {min_distance}")
-    print(f"[출발 노드]")
-    print(" -> " + str(root_node).replace("\n", "\n -> "))
-    print(f"\n[도착 노드]")
-    print(" -> " + str(dist_node).replace("\n", "\n -> "))
-
     # 1. 입구에서 가장 가까운 빈 자리
     # 2. 경로 (노드를 순서대로 반환)
     # 3. 거리 계산 (멘하탄 거리)
 
-    # node: PathNode
-    # start_node = root_node.get()
-    # queue = Queue()
-    # queue.put(dist_node.parent)
+    node: PathNode
+    near_node: PathNode
+    path_list: List[PathNode]
+    path = PriorityQueue()
+    queue = Queue()
+    queue.put((0, [root_node]))
 
-    # while len(queue) > 0:
-    #     node = queue.get()
+    while not queue.empty():
+        distance, path_list = queue.get()
+        node = path_list[-1]
 
-    #     if node.parent == start_node:
-    #         p_node = node.parent
-    #         p_node.parent = start_node
-    #         break
+        for near_node in node.get_near_node():
+            if near_node.is_leaf_node:
+                out_path_list = copy.copy(path_list)
+                out_path_list.append(near_node)
+                temp = (distance + calculate_distance_node(node, near_node), out_path_list)
+                path.put(temp)
+                if is_fast_mode:
+                    return temp
+                else:
+                    continue
 
-    #     queue.put(node.parent)
+            if near_node in path_list:
+                continue
 
-    # return root_node, dist_node
+            path_list.append(near_node)
+            queue.put((distance + calculate_distance_node(node, near_node), copy.copy(path_list)))
+
+    result_list = []
+    idx = 0
+    while not path.empty() and idx < 3:
+        result_list.append(path.get())
+        idx += 1
+
+    if len(result_list) == 0:
+        print("경로를 찾을 수 없습니다.")
+        return None
+    else:
+        print("[탐색된 경로]")
+        for idx, result in enumerate(result_list):
+            current_distance, current_path = result
+            print(f"\n[{idx + 1}번] 가장 가까운 빈 공간 거리: {current_distance}")
+            print(f"[출발 노드]")
+            print(" -> " + str(current_path[0]).replace("\n", "\n -> "))
+            print(f"\n[도착 노드]")
+            print(" -> " + str(current_path[-1]).replace("\n", "\n -> "))
+
+            print(f"\n==> 경로: {current_path}")
+
+        return result_list[0]
