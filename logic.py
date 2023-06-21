@@ -109,14 +109,15 @@ def processing(frame, args: Dict[str, Union[str, int]]):
     print("Inferring...")
     object_data = yolo_helper.use_yolo(frame, args["yolo_model_name"].lower() + ".pt")[0]
 
-    for list_tag in ["empty_space_list", "anchor_pos_list", "entrance_location_list"]:
-        data_list = global_data_dict[list_tag]
+    if args["no_window"]:
+        for list_tag in ["empty_space_list", "anchor_pos_list", "entrance_location_list"]:
+            data_list = global_data_dict[list_tag]
 
-        for data in data_list:
-            obj = tuple(map(int, data.split(",")))
-            x, y = obj
+            for data in data_list:
+                obj = tuple(map(int, data.split(",")))
+                x, y = obj
 
-            cv2.circle(frame, (x, y), 5, color=(0, 255, 0), thickness=5)
+                cv2.circle(frame, (x, y), 5, color=(0, 255, 0), thickness=5)
 
     print(f"감지된 물체: {len(object_data)}")
 
@@ -134,8 +135,9 @@ def processing(frame, args: Dict[str, Union[str, int]]):
 
     global_data_dict["real_path_list"] = pathfinder.get_real_path(path)
 
-    # 프레임 출력
-    cv2.imshow("VideoFrame", frame)
+    if args["no_window"]:
+        # 프레임 출력
+        cv2.imshow("VideoFrame", frame)
 
     push_arduino(args["arduino_port"])
 
@@ -164,5 +166,6 @@ def real_time_start(args: Dict[str, Union[str, int]]):
 
     # 장치 해제
     capture.release()
-    # 모든 창 닫기
-    cv2.destroyAllWindows()
+    if args["no_window"]:
+        # 모든 창 닫기
+        cv2.destroyAllWindows()
