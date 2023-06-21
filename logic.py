@@ -1,10 +1,12 @@
 import os
 import pickle
 import time
-from typing import List, Tuple
+import cv2
+from typing import Dict, List, Tuple, Union
 from arduino import ArduinoManager
 
 import checker
+import pathfinder
 from global_var import global_data_dict
 
 SAVE_DATA_KEYS = ["entrance_location_list", "path_pixel_scale", "empty_space_list", "anchor_pos_list", "edge_list"]
@@ -98,3 +100,69 @@ def clear_data():
     for data in global_data_dict.values():
         data.clear()
     global_data_dict["path_pixel_scale"].extend([30, 30])
+
+
+def processing(frame, args: Dict[str, Union[str, int]]):
+    print("Library loading...")
+    import yolo_helper
+
+    print("Inferring...")
+    object_data = yolo_helper.use_yolo(frame, args["yolo_model_name"].lower() + ".pt")[0]
+
+    for list_tag in ["empty_space_list", "anchor_pos_list", "entrance_location_list"]:
+        data_list = global_data_dict[list_tag]
+
+        for data in data_list:
+            obj = tuple(map(int, data.split(",")))
+            x, y = obj
+
+            cv2.circle(frame, (x, y), 5, color=(0, 255, 0), thickness=5)
+
+    print(f"감지된 물체: {len(object_data)}")
+
+    overlap_space_list_refresh(object_data)
+
+    entry_index = int(args["entry_index"])
+    entry_pos = global_data_dict["entrance_location_list"][entry_index]
+
+    print(f"입구 좌표: {entry_pos}")
+    entry_pos = tuple(map(int, entry_pos.split(",")))
+
+    distance, path = pathfinder.find_path(entry_pos, lambda *args, **kwargs: pathfinder.PathNode(*args, **kwargs), True)
+
+    print(f"최단 거리: {distance}")
+
+    global_data_dict["real_path_list"] = pathfinder.get_real_path(path)
+
+    # 프레임 출력
+    cv2.imshow("VideoFrame", frame)
+
+    push_arduino()
+
+
+def real_time_start(args: Dict[str, Union[str, int]]):
+    """실시간 서비스 처리
+
+    Args:
+        args (Dict[str, Union[str, int]]): 인자값
+    """
+
+    print("전처리 데이터 로드 중...")
+    load_data(args["savepath"])
+
+    print("카메라 장치 로드 중...")
+    # 캡쳐 장치 설정
+    capture = cv2.VideoCapture(0)
+    capture.set(cv2.CAP_PROP_FRAME_WIDTH, int(args["frame_width"]))
+    capture.set(cv2.CAP_PROP_FRAME_HEIGHT, int(args["frame_height"]))
+
+    while cv2.waitKey(33) < 0:  # 키 입력이 없을경우, 반복
+        # 한 프레임을 카메라에서 가져옴
+        ret, frame = capture.read()
+
+        processing(frame, args)
+
+    # 장치 해제
+    capture.release()
+    # 모든 창 닫기
+    cv2.destroyAllWindows()

@@ -1,5 +1,5 @@
 import os
-from typing import List, Tuple, Union
+from typing import Dict, List, Tuple, Union
 import cv2
 import dearpygui.dearpygui as dpg
 
@@ -135,11 +135,12 @@ def add_and_load_resized_image(image_path: str, small_window_w: Union[int, None]
     return img_tag, img_w, img_h
 
 
-def detect_object(method_type: str):
+def detect_object(method_type: str, image_path: str):
     """물체 인식 처리
 
     Args:
         method_type (str): 물체인식 방법
+        image_path (str): 이미지 경로
     """
 
     global object_data
@@ -162,7 +163,7 @@ def detect_object(method_type: str):
         import yolo_helper
 
         print("inferring...")
-        object_data = yolo_helper.use_yolo(image_path, current_state["yolo_model_name"].lower() + ".pt")[0]
+        object_data = yolo_helper.use_yolo_from_file(image_path, current_state["yolo_model_name"].lower() + ".pt")[0]
 
     for cls, (x, y, w, h) in object_data:
         cls = cls if cls == "car" else "other"
@@ -538,14 +539,16 @@ def clear_path():
     dpg.configure_item(result_widget_tag, items=[])
 
 
-def app(image_path: str):
+def app(args: Dict[str, Union[str, int]]):
     """앱 실행 메인함수
 
     Args:
-        image_path (str): 처리할 이미지 경로
+        args (Dict[str, Union[str, int]]): 인자값
     """
 
     global img_widget_tag, status_widget_tag, img_w, img_h
+
+    image_path = args["image_path"]
 
     dpg.create_context()
 
@@ -596,7 +599,7 @@ def app(image_path: str):
             dpg.add_button(label="초기화", callback=lambda: detect_object("Clear"))
 
             with dpg.group(horizontal=True):
-                dpg.add_button(label="YOLO 적용", callback=lambda: detect_object("YOLO"))
+                dpg.add_button(label="YOLO 적용", callback=lambda: detect_object("YOLO", image_path))
                 # dpg.add_button(label="SVM", callback=lambda: detect_object("SVM"))
 
                 dpg.add_combo(["YOLOv8n", "YOLOv8s", "YOLOv8m", "YOLOv8l", "YOLOv8x"], default_value=current_state["yolo_model_name"], callback=select_yolo_model_handler)
@@ -643,8 +646,8 @@ def app(image_path: str):
 
         with dpg.collapsing_header(label="기타", default_open=True):
             with dpg.group(horizontal=True):
-                dpg.add_button(label="저장", callback=lambda: (logic.save_data()))
-                dpg.add_button(label="불러오기", callback=lambda: (logic.clear_data(), logic.load_data(), refresh_select(), refresh_draw()))
+                dpg.add_button(label="저장", callback=lambda: (logic.save_data(args["savepath"])))
+                dpg.add_button(label="불러오기", callback=lambda: (logic.clear_data(), logic.load_data(args["savepath"]), refresh_select(), refresh_draw()))
                 dpg.add_button(label="초기화", callback=lambda: (clear_path(), logic.clear_data(), refresh_draw()))
 
     dpg.create_viewport(title="PLS - Parking Lot Service", width=1700, height=900)
@@ -660,5 +663,4 @@ def app(image_path: str):
 
 
 if __name__ == "__main__":
-    image_path = "images/image01.png"
-    app(image_path)
+    app({"image_path": "images/image01.png"})

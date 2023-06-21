@@ -2,13 +2,17 @@ import cv2
 from ultralytics import YOLO
 
 
-def use_yolo(filepath="images/image01.png", model_name="yolov8n.pt"):
+def use_yolo_from_file(filepath="images/image01.png", model_name="yolov8n.pt"):
+    im2 = cv2.imread(filepath)
+    return use_yolo(im2, model_name)
+
+
+def use_yolo(img_data, model_name="yolov8n.pt"):
     global model
 
     model = YOLO(model_name)
 
-    im2 = cv2.imread(filepath)
-    results = model.predict(source=im2)
+    results = model.predict(source=img_data)
 
     data_list = []
 

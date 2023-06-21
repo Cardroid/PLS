@@ -4,6 +4,7 @@
 /yolo*.pt
 /imgui.ini
 /data.pickle
+/data_backup.pickle
 
 yolo_test.py
 
