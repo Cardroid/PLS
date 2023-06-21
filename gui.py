@@ -135,7 +135,7 @@ def add_and_load_resized_image(image_path: str, small_window_w: Union[int, None]
     return img_tag, img_w, img_h
 
 
-def detect_object(method_type: str, image_path: str):
+def detect_object(method_type: str, image_path: str = None):
     """물체 인식 처리
 
     Args:

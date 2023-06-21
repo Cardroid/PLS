@@ -3,6 +3,8 @@ import pickle
 import time
 import cv2
 from typing import Dict, List, Tuple, Union
+
+import numpy as np
 from arduino import ArduinoManager
 
 import checker
@@ -102,14 +104,21 @@ def clear_data():
     global_data_dict["path_pixel_scale"].extend([30, 30])
 
 
-def processing(frame, args: Dict[str, Union[str, int]]):
-    print("Library loading...")
+def processing(frame: np.ndarray, args: Dict[str, Union[str, int]]):
+    """주요 로직 처리 [이미지 -> 물체인식 -> 경로 탐색 -> 정보 정리 -> 아두이노 통신 -> 사용자]
+
+    Args:
+        frame (np.ndarray): 이미지 데이터
+        args (Dict[str, Union[str, int]]): 인자값
+    """
+
+    print("Library loading...")  # 라이브러리 로딩
     import yolo_helper
 
-    print("Inferring...")
+    print("Inferring...")  # YOLO 모델 추론 (물체인식)
     object_data = yolo_helper.use_yolo(frame, args["yolo_model_name"].lower() + ".pt")[0]
 
-    if args["no_window"]:
+    if args["use_window"]:  # 윈도우를 표시 할 경우
         for list_tag in ["empty_space_list", "anchor_pos_list", "entrance_location_list"]:
             data_list = global_data_dict[list_tag]
 
@@ -117,28 +126,30 @@ def processing(frame, args: Dict[str, Union[str, int]]):
                 obj = tuple(map(int, data.split(",")))
                 x, y = obj
 
-                cv2.circle(frame, (x, y), 5, color=(0, 255, 0), thickness=5)
+                cv2.circle(frame, (x, y), 5, color=(0, 255, 0), thickness=5)  # 전처리 과정에서 저장한 좌표 정보를 간략하게 표시
 
-    print(f"감지된 물체: {len(object_data)}")
+    print(f"감지된 물체: {len(object_data)}")  # 물체수 표시
 
-    overlap_space_list_refresh(object_data)
+    overlap_space_list_refresh(object_data)  # 인식된 물체와 주차 자리 좌표의 겹침 계산
 
-    entry_index = int(args["entry_index"])
-    entry_pos = global_data_dict["entrance_location_list"][entry_index]
+    entry_index = int(args["entry_index"])  # 주차장 입구 좌표 인덱스
+    entry_pos = global_data_dict["entrance_location_list"][entry_index]  # 주차장 입구 좌표 가져오기
 
-    print(f"입구 좌표: {entry_pos}")
+    print(f"입구 좌표: {entry_pos}")  # 주차장 입구 좌표 표시
     entry_pos = tuple(map(int, entry_pos.split(",")))
 
+    # 경로 탐색 (내부적으로 빈 주차 자리 좌표에 경로 노드를 배치하고 연결하여 DFS로 탐색함)
     distance, path = pathfinder.find_path(entry_pos, lambda *args, **kwargs: pathfinder.PathNode(*args, **kwargs), True)
 
-    print(f"최단 거리: {distance}")
+    print(f"최단 거리: {distance}")  # 가장 가까운 거리 표시 (픽셀 단위)
 
-    global_data_dict["real_path_list"] = pathfinder.get_real_path(path)
+    global_data_dict["real_path_list"] = pathfinder.get_real_path(path)  # 탐색된 경로를 바탕으로 실제 경로 정보 생성
 
-    if args["no_window"]:
+    if args["use_window"]:
         # 프레임 출력
         cv2.imshow("VideoFrame", frame)
 
+    # 아두이노로 정보 송신
     push_arduino(args["arduino_port"])
 
 
@@ -166,6 +177,6 @@ def real_time_start(args: Dict[str, Union[str, int]]):
 
     # 장치 해제
     capture.release()
-    if args["no_window"]:
+    if args["use_window"]:
         # 모든 창 닫기
         cv2.destroyAllWindows()
